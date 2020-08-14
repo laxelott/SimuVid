@@ -1,0 +1,21 @@
+{
+  "name": "simuvid",
+  "version": "1.0.0",
+  "description": "SimuVid",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tsc": "tsc"
+  },
+  "author": "Laxelott",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "ws": "^7.3.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.7",
+    "@types/ws": "^7.2.6",
+    "typescript": "^3.9.7"
+  }
+}
