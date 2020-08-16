@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>SimuVid</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="icon" href="img/icon.png" />
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="bootstrap/bootstrap.min.css" crossorigin="anonymous" />
+    <script src="bootstrap/bootstrap.min.js" crossorigin="anonymous"></script>
+
+    <!-- Template -->
+    <link rel="stylesheet" href="css/template.css" crossorigin="anonymous" />
+
+    <!-- Video.js -->
+    <link href="//vjs.zencdn.net/6.7/video-js.min.css" rel="stylesheet">
+    <script src="//vjs.zencdn.net/6.7/video.min.js"></script>
+
+    <!-- Custom -->
+    <script type="module" defer>
+        import { webSocket } from "./js/WebSocket.js";
+        const playerEvents = [ // Player events that get sent to the Web Socket
+            "play", "pause", "seeked"
+        ];
+        var data = {};
+        var currentlyEventing;
+        var player;
+
+
+        // WEBSOCKET MANAGEMENT
+        // Events
+        webSocket.onMessage = function (message) {
+            message = JSON.parse(message.data);
+            message.timestamp -= new Date().getTime();
+
+            console.log("processing? %o, event: %s", currentlyEventing, message.event);
+
+
+            setTimeout(function () {
+                currentlyEventing = true;
+                player.currentTime(message.time);
+
+                switch (message.event) {
+                    case "play":
+                        currentlyEventing = true;
+                        player.play();
+                        break;
+                    case "pause":
+                        currentlyEventing = true;
+                        player.pause();
+                        break;
+                    default:
+                        console.log("Defaulted with '%s'", message.event);
+                }
+
+                setTimeout(function () {
+                    currentlyEventing = false;
+                    player.muted(false);
+                }, 200);
+
+            }, message.timestamp);
+        };
+
+
+        // Video Functions
+        function processEvent(event) {
+            if (!currentlyEventing) {
+                player.muted(true);
+
+                data.event = event.type;
+                data.time = player.currentTime();
+                webSocket.send(JSON.stringify(data));
+
+                currentlyEventing = true;
+            }
+        }
+
+
+        // DOCUMENT
+        $(document).ready(function () {
+            player = videojs('video-main');
+
+            // File Input
+            $("#file-video").change(function () {
+                // If user selected files
+                if ($(this).get()[0].files.length != 0) {
+                    // Get file
+                    var file = $(this).get()[0].files[0];
+
+                    // Create video url from file 
+                    var fileUrl = URL.createObjectURL(file);
+
+                    // Add the url as a video source and set MIME type
+                    player.src([
+                        { type: file.type, src: fileUrl }
+                    ]);
+
+                    // Set video to preload
+                    $("#video-main").prop("preload", "auto");
+
+                    // Connect to the Web Socket
+                    webSocket.connect();
+                }
+            });
+
+
+            // VIDEO EVENTS
+            // -> On every event, send relevant data through websocket
+            for (var i = 0; i < playerEvents.length; ++i) {
+                player.on(playerEvents[i], processEvent);
+            }
+        });
+    </script>
+</head>
+
+<body class="text-center">
+    <header>
+        <div class="collapse bg-dark" id="navbarHeader">
+            <div class="container">
+                <div class="row">
+                    <div class="col-sm-8 col-md-7 py-4">
+                        <h4 class="text-white">About</h4>
+                        <p class="text-muted">A simple application for watching local videos while syncronized with one another.</p>
+                    </div>
+                    <div class="col-sm-4 offset-md-1 py-4">
+                        <h4 class="text-white">Relevant Links</h4>
+                        <ul class="list-unstyled">
+                            <li><a href="https://github.com/laxelott/SimuVid" target=”_blank”>GitHub Repo</a></li>
+                            <li><a href="https://trello.com/b/tAsVktgt/simuvid" target=”_blank”>Trello Page</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="navbar navbar-dark bg-dark box-shadow">
+            <div class="container d-flex justify-content-between">
+                <a href="#" class="navbar-brand d-flex align-items-center">
+                    <img src="img/icon.png" width="50" height="50" class="d-inline-block align-top">
+                    <h3>SimuVid</h3>
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarHeader" aria-controls="navbarHeader" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container w-50 p-4">
+        <div class="row justify-content-center">
+            <video id="video-main" class="video-js w-100" controls preload="none" width="640" height="264" poster="img/no-video.png" data-setup="{}">
+                <p class="vjs-no-js">
+                    To view this video please enable JavaScript, and consider upgrading to a
+                    web browser that
+                    <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
+                </p>
+            </video>
+        </div>
+        <br>
+        <div class="row justify-content-center">
+            <div class="input-group">
+                <div class="custom-file">
+                    <input id="file-video" type="file" class="custom-file-input" accept="video/*">
+                    <label class="custom-file-label" for="file-video">Choose file</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
