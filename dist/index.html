@@ -29,6 +29,35 @@
         const playerEvents = [ // Player events that get sent to the Web Socket
             "play", "pause", "seeked"
         ];
+        const keyboardShortcuts = [
+            {
+                name: "Pause/Play",
+                keyName: "Space",
+                keyCode: 32,
+                event: function () {
+                    if (player.paused()) {
+                        player.play();
+                    } else {
+                        player.pause();
+                    }
+                }
+            }, {
+                name: "Seek Backward",
+                keyName: "Left Arrow Key",
+                keyCode: 37,
+                event: function () {
+                    player.currentTime(player.currentTime() - 5);
+                }
+            }, {
+                name: "Seek Forward",
+                keyName: "Right Arrow Key",
+                keyCode: 39,
+                event: function () {
+                    player.currentTime(player.currentTime() + 5);
+                }
+            }
+        ];
+
         var data = {};
         var currentlyEventing;
         var player;
@@ -96,6 +125,7 @@
             $("#file-video").change(function () {
                 // If user selected files
                 if ($(this).get()[0].files.length != 0) {
+
                     // Get file
                     var file = $(this).get()[0].files[0];
 
@@ -110,17 +140,39 @@
                     // Set video to preload
                     $("#video-main").prop("preload", "auto");
 
+                    // Set file input text
+                    $("#lbl-video").html("Current file: " + file.name);
+
                     // Connect to the Web Socket
                     webSocket.connect();
                 }
             });
 
+            /*
+            Shortcut structure:
+            {
+                name: string
+                key: string
+                keyCode: int
+                event: function
+            }
+            */
+            // Keyboard shortcuts
+            keyboardShortcuts.forEach(shortcut => {
+                $(document).keydown(function (event) {
+                    console.log(event.which);
+                    if(event.which == shortcut.keyCode) {
+                        console.log("Running '%s'...", shortcut.name);
+                        shortcut.event();
+                    }
+                });
+            });
 
             // VIDEO EVENTS
             // -> On every event, send relevant data through websocket
-            for (var i = 0; i < playerEvents.length; ++i) {
-                player.on(playerEvents[i], processEvent);
-            }
+            playerEvents.forEach(eventCode => {
+                player.on(eventCode, processEvent);
+            });
         });
     </script>
 </head>
@@ -172,7 +224,7 @@
             <div class="input-group">
                 <div class="custom-file">
                     <input id="file-video" type="file" class="custom-file-input" accept="video/*">
-                    <label class="custom-file-label" for="file-video">Choose file</label>
+                    <label id="lbl-video" class="custom-file-label" for="file-video">Choose file</label>
                 </div>
             </div>
         </div>
