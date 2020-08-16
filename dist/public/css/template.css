@@ -37,9 +37,3 @@
   }
   
   .box-shadow { box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .05); }
-
-  .image-container img{
-    
-  max-height: 100%;
-  max-width: 100%;
-  }

@@ -19,6 +19,9 @@
     <!-- Template -->
     <link rel="stylesheet" href="css/template.css" crossorigin="anonymous" />
 
+    <!-- Custom -->
+    <link rel="stylesheet" href="css/custom.css" crossorigin="anonymous" />
+
     <!-- Video.js -->
     <link href="//vjs.zencdn.net/6.7/video-js.min.css" rel="stylesheet">
     <script src="//vjs.zencdn.net/6.7/video.min.js"></script>
@@ -70,7 +73,14 @@
 
         // WEBSOCKET MANAGEMENT
         // Events
+        webSocket.onOpen = function () {
+            updateAlert("ready");
+        };
+        webSocket.onClose = function () {
+            updateAlert("error");
+        }
         webSocket.onMessage = function (message) {
+            updateAlert("loading");
             message = JSON.parse(message.data);
             message.timestamp -= new Date().getTime();
 
@@ -97,13 +107,16 @@
                 setTimeout(function () {
                     currentlyEventing = false;
                     player.muted(false);
+                    updateAlert("ready");
                 }, 200);
 
             }, message.timestamp);
         };
 
 
-        // Video Functions
+
+        // FUNCTIONS
+        // Video Function
         function processEvent(event) {
             if (!currentlyEventing) {
                 player.muted(true);
@@ -113,6 +126,27 @@
                 webSocket.send(JSON.stringify(data));
 
                 currentlyEventing = true;
+            }
+        }
+
+        // Alert Function
+        function updateAlert(mode) {
+            $("#div-alert").removeClass("alert-warning");
+            $("#div-alert").removeClass("alert-success");
+            $("#div-alert").removeClass("alert-danger");
+            switch (mode) {
+                case "ready":
+                    $("#div-alert").addClass("alert-success");
+                    $("#div-alert").text("Ready");
+                    break;
+                case "loading":
+                    $("#div-alert").addClass("alert-warning");
+                    $("#div-alert").text("Loading...");
+                    break;
+                case "error":
+                    $("#div-alert").addClass("alert-danger");
+                    $("#div-alert").text("Not Connected");
+                    break;
             }
         }
 
@@ -145,6 +179,9 @@
 
                     // Connect to the Web Socket
                     webSocket.connect();
+
+                    // Set file name 
+                    data.filename = file.name;
                 }
             });
 
@@ -161,7 +198,7 @@
             keyboardShortcuts.forEach(shortcut => {
                 $(document).keydown(function (event) {
                     console.log(event.which);
-                    if(event.which == shortcut.keyCode) {
+                    if (event.which == shortcut.keyCode) {
                         console.log("Running '%s'...", shortcut.name);
                         shortcut.event();
                     }
@@ -210,8 +247,11 @@
     </header>
 
     <div class="container w-50 p-4">
-        <div class="row justify-content-center">
-            <video id="video-main" class="video-js w-100" controls preload="none" width="640" height="264" poster="img/no-video.png" data-setup="{}">
+        <div id="div-alert" class="alert alert-danger" role="alert">
+            Not Connected
+        </div>
+        <div class="row justify-content-center video-js-responsive-container vjs-hd">
+            <video id="video-main" class="video-js vjs-16-9" controls preload="none" poster="img/no-video.png" data-setup="{}">
                 <p class="vjs-no-js">
                     To view this video please enable JavaScript, and consider upgrading to a
                     web browser that

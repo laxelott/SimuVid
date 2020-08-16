@@ -1,13 +1,26 @@
 const express = require('express');
 const http = require('http');
 const ws = require('ws');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new ws.Server({ server: server });
 
 const webPort = 8080;
+var date;
 
+
+// Logging function
+function addToLogFile(line) {
+	console.log(line);
+	date = new Date().toLocaleString("en-GB", { timeZone: "America/Mexico_City" });
+	fs.appendFile("server.log", `[${date}] > ${line}\n`, (err) => {
+		if (err) throw err;
+	});
+}
+
+addToLogFile("Starting...");
 
 // WebSocket listener
 wss.on('connection', (ws) => {
@@ -19,19 +32,20 @@ wss.on('connection', (ws) => {
 	// Send Callback
 	ws.send(JSON.stringify(data));
 
-	console.log('WS Connection from %s:%d', ws._socket.remoteAddress, ws._socket.remotePort);
+	// Log event
+	addToLogFile(`WS Connection from ${ws._socket.remoteAddress}:${ws._socket.remotePort}`);
 
-	// Add a simple message event
+	// Broadcast message event
 	ws.on('message', (message) => {
 		data = JSON.parse(message);
 
-		// Log the received message and send it back to the client
-		console.log('Received: %s', message);
+		// Log message
+		addToLogFile(`Recieved: ${message}`);
 
 		// Add timestamp
 		data.timestamp = new Date().getTime() + 500;
 
-		// Broadcast data to everyone 
+		// Broadcast message to everyone 
 		wss.clients.forEach(client => {
 			client.send(JSON.stringify(data));
 		});
@@ -45,7 +59,7 @@ wss.on('connection', (ws) => {
 app.use(express.static("dist/public"));
 
 app.get('/', (req, res) => {
-	res.sendFile("/dist/index.html", {root: __dirname + "/../"});
+	res.sendFile("/dist/index.html", { root: __dirname + "/../" });
 });
 
 
@@ -53,4 +67,11 @@ app.get('/', (req, res) => {
 // Seting up server
 server.listen(webPort, () => {
 	console.log(`Server opened on port ${webPort}!`);
+})
+
+
+
+// Exit actions
+process.on("exit", function () {
+	addToLogFile("Exiting...");
 })
