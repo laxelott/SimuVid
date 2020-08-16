@@ -1,6 +1,7 @@
 var webSocket = {
     socket: null,
     webSocketLocation: window.location.host,
+    webSocketProtocol: "ws",
     connect: function() {
         webSocket.socket = new WebSocket(webSocket.getFullPath());
         webSocket.socket.onopen = webSocket.onOpen;
@@ -26,7 +27,7 @@ var webSocket = {
         webSocket.socket.send(content);
     },
     getFullPath: function() {
-        return `ws://${this.webSocketLocation}`;
+        return `${this.webSocketProtocol}://${this.webSocketLocation}`;
     }
 };
 

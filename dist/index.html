@@ -33,6 +33,11 @@
         var currentlyEventing;
         var player;
 
+        // Set as wss if it is https
+        if (window.location.protocol == "https:") {
+            webSocket.webSocketProtocol = "wss";
+        }
+
 
         // WEBSOCKET MANAGEMENT
         // Events
