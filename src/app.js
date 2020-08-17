@@ -1,16 +1,27 @@
+require("./modules/hashCode");
+
 const express = require('express');
 const http = require('http');
-const ws = require('ws');
 const fs = require('fs');
+const parser = require('body-parser');
 
 const app = express();
-const server = http.createServer(app);
-const wss = new ws.Server({ server: server });
-
 const webPort = 8080;
-var date;
+
+var channels = require('./modules/channels');
+
+// Set the view engine to ejs
+app.set('view engine', 'ejs');
+// Set views path
+app.set("views", __dirname + "/../dist/pages");
+
+// Initialize channels module
+channels = channels(app);
+channels.logFunction = addToLogFile;
 
 
+
+// FUNCTIONS
 // Logging function
 function addToLogFile(line) {
 	console.log(line);
@@ -20,56 +31,60 @@ function addToLogFile(line) {
 	});
 }
 
-addToLogFile("Starting...");
-
-// WebSocket listener
-wss.on('connection', (ws) => {
-	var data = {
-		event: "handshake",
-		data: "hello! C:"
-	};
-
-	// Send Callback
-	ws.send(JSON.stringify(data));
-
-	// Log event
-	addToLogFile(`WS Connection from ${ws._socket.remoteAddress}:${ws._socket.remotePort}`);
-
-	// Broadcast message event
-	ws.on('message', (message) => {
-		data = JSON.parse(message);
-
-		// Log message
-		addToLogFile(`Recieved: ${message}`);
-
-		// Add timestamp
-		data.timestamp = new Date().getTime() + 500;
-
-		// Broadcast message to everyone 
-		wss.clients.forEach(client => {
-			client.send(JSON.stringify(data));
-		});
-	});
-
-});
 
 
+// SERVER SET-UP
+addToLogFile("Setting up...");
 
-//Static server
+// Static server
 app.use(express.static("dist/public"));
 
+
+
+// REQUESTS
+// index.html
 app.get('/', (req, res) => {
-	res.sendFile("/dist/index.html", { root: __dirname + "/../" });
+	res.render("index");
 });
 
+// Channel creation
+app.post('/create/channel/', parser.urlencoded({ extended: false }), (req, res) => {
+    console.log('Got body:', req.body);
+
+	var channelName = req.body.name;
+	var channelPassword = req.body.name;
+
+	res.end(JSON.stringify( channels.createChannel(channelName, channelPassword)));
+});
+
+// Channels
+app.get('/channel/:channelName', (req, res) => {
+	var channelName = req.params.channelName;
+	var channelPassword = req.query.pwd;
+	var args;
+
+	console.log("Channel accessed! (%s) with password: %s", channelName, channelPassword);
 
 
-// Seting up server
-server.listen(webPort, () => {
+	if(channels.validateChannel(channelName, channelPassword)) {
+		console.log(`Rendering '${channelName}' (${channelPassword})...`);
+
+		res.render("channel", {
+			channelName: channelName,
+			channelPassword: channelPassword
+		});
+	} else {
+		res.render("index", {
+			alert: true,
+			alertMode: 'error',
+			alertText: 'Invalid channel!'
+		});
+	}
+});
+
+app.listen(webPort, () => {
 	console.log(`Server opened on port ${webPort}!`);
 })
-
-
 
 // Exit actions
 process.on("exit", function () {

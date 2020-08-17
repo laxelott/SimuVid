@@ -1,0 +1,16 @@
+/* Header image container */
+.image-container img{
+	max-height: 100%;
+	max-width: 100%;
+}
+
+/* For channel creation */
+#form-channel {
+	width: 100%;
+    padding: 15px;
+    margin: 0 auto;
+}
+
+.form-container {
+	max-width: 330px;
+}
