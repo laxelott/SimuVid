@@ -29,17 +29,19 @@ module.exports = function (app) {
 
 			// WebSocket Listener
 			app.ws("/" + channel.name, (ws, req) => {
-				var valid = true;
 				var password = req.query.pwd;
 				var data = {
 					event: "handshake",
 					data: "Hello! C:"
 				};
+				var validation = validateChannel(channel.name, password);
 
-				logFunction(`${ws._socket.remoteAddress}:${ws._socket.remotePort} connecting -> ${channel.name} (pw: ${password})`);
+				console.log(ws.handshake);
 
-				// Check if password is valid
-				if (validateChannel(channel.name, password)) {
+				logFunction(`${req.connection.remoteAddress} connecting -> ${channel.name} (pw: ${password})`);
+
+				// Check if channel is valid
+				if (validation.valid) {
 					logFunction("Valid credentials");
 
 					// Broadcast message event
@@ -70,13 +72,12 @@ module.exports = function (app) {
 
 					};
 				} else {
-					data.data = "Wrong password!"
-					valid = false;
+					data.data = validation.message;
 				}
 				// Send Handshake
 				ws.send(JSON.stringify(data));
 
-				if (!valid) {
+				if (!validation.valid) {
 					ws.close();
 				}
 			})
@@ -92,7 +93,7 @@ module.exports = function (app) {
 
 		return result;
 	};
-	this.queueRemoveChannel = function (name) {
+	this.queueRemoveChannel = function (name, waitTime = 2000) {
 		try {
 			var channel = openChannels.filter((channel) => {
 				return channel.name = name;
@@ -109,20 +110,38 @@ module.exports = function (app) {
 					if (index >= 0) {
 						openChannels[index].wss.close();
 						openChannels.splice(index, 1);
+						logFunction(`Channel closed`)
 					} else {
 						logFunction(`Channel does not exist!`)
 					}
 				}
-			}, 2000);
+			}, waitTime);
 		} catch (e) { }
 	};
 	this.validateChannel = function (name, password) {
-		var number = openChannels.findIndex((item) => {
-
+		var num;
+		var res = {
+			valid: true,
+			message: "none"
+		};
+		
+		num = openChannels.findIndex((item) => {
 			return (item.name == name) && (item.password == password);
 		});
+		if (num < 0) {
+			res.valid = false;
+			num = openChannels.findIndex((item) => {
+				return item.name == name;
+			});
 
-		return number >= 0;
+			if (num < 0) {
+				res.message = "Channel does not exist!";
+			} else {
+				res.message = "Wrong password";
+			}
+		} 
+
+		return res;
 	}
 
 	return this;

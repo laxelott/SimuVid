@@ -6,6 +6,7 @@
 
 	<!-- Main Script -->
 	<script defer>
+		// FUNCTIONS
 		function customAlert(text, mode) {
 			$("#div-alert").fadeOut(1000, function () {
 
@@ -29,6 +30,9 @@
 				$("#div-alert").fadeIn(1000);
 			});
 		}
+		function connectToChannel(name, password) {
+			window.location.href = `${window.location.origin}/channel/${name}?pwd=${password}`;
+		}
 
 		$(document).ready(function () {
 			$("#form-channel").submit(function (ev) {
@@ -37,7 +41,7 @@
 				// Get the channel information
 				var data = {
 					name: $("#txt-channel-name").val(),
-					password: $("#pass-channel").val()
+					password: $("#txt-channel-password").val()
 				};
 
 				$.post('/create/channel/', data, function (response) {
@@ -50,10 +54,19 @@
 					// Wait and redirect to newly created channel
 					if (!response.error) {
 						setTimeout(() => {
-							window.location.href = `${ window.location.origin}/channel/${response.channel.name}?pwd=${response.channel.password}`;
+							connectToChannel(
+								response.channel.name,
+								response.channel.password
+							);
 						}, 2000);
 					}
 				});
+			});
+			$("#btn-connect").click(function () {
+				connectToChannel(
+					$("#txt-channel-name").val(),
+					$("#txt-channel-password").val()
+				);
 			});
 		});
 	</script>
@@ -72,14 +85,22 @@
 	<div class="container form-container">
 		<form id="form-channel" class="border border-secondary rounded">
 			<div class="form-group">
-				<label for="txt-channel-name">Channel Name: </label>
-				<input id="txt-channel-name" type="text" class="form-control" placeholder="Channel name" />
+				<label for="txt-channel-name">Channel Name</label>
+				<input id="txt-channel-name" type="text" class="form-control" placeholder="Channel Name" />
 			</div>
 			<div class="form-group">
-				<label for="pass-channel">Password</label>
-				<input id="pass-channel" type="password" class="form-control" placeholder="Password">
+				<label for="txt-channel-password">Password</label>
+				<input id="txt-channel-password" type="password" class="form-control" placeholder="Password">
+				<small class="form-text text-muted">
+					Have no idea of what to do?
+					<br>
+					Try reading the <a href="/what-to-do">Instructions</a>
+				</small>
 			</div>
-			<button type="submit" class="btn btn-primary">Submit</button>
+			<div class="btn-group">
+				<button type="submit" class="btn btn-primary">Create</button>
+				<button id="btn-connect" class="btn btn-secondary">Connect</button>
+			</div>
 		</form>
 
 		<br>
@@ -88,9 +109,9 @@
 	</div>
 
 	<% if (locals.alert) { %>
-		<script>
-			customAlert('<%= alertText %>', '<%= alertMode %>');
-		</script>
+	<script>
+		customAlert('<%= alertText %>', '<%= alertMode %>');
+	</script>
 	<% } %>
 </body>
 

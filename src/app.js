@@ -25,7 +25,7 @@ channels.logFunction = addToLogFile;
 // Logging function
 function addToLogFile(line) {
 	console.log(line);
-	date = new Date().toLocaleString("en-GB", { timeZone: "America/Mexico_City" });
+	date = new Date().toLocaleString("en-GB", { timeZone: "America/Panama" });
 	fs.appendFile("server.log", `[${date}] > ${line}\n`, (err) => {
 		if (err) throw err;
 	});
@@ -42,31 +42,34 @@ app.use(express.static("dist/public"));
 
 
 // REQUESTS
-// index.html
+// "static" pages
 app.get('/', (req, res) => {
 	res.render("index");
+});
+app.get('/what-to-do', (req, res) => {
+	res.render("instructions");
 });
 
 // Channel creation
 app.post('/create/channel/', parser.urlencoded({ extended: false }), (req, res) => {
-    console.log('Got body:', req.body);
-
 	var channelName = req.body.name;
 	var channelPassword = req.body.name;
 
-	res.end(JSON.stringify( channels.createChannel(channelName, channelPassword)));
+	res.end(JSON.stringify(channels.createChannel(channelName, channelPassword)));
+
+	channels.queueRemoveChannel(channelName, 5000);
 });
 
 // Channels
 app.get('/channel/:channelName', (req, res) => {
 	var channelName = req.params.channelName;
 	var channelPassword = req.query.pwd;
-	var args;
+	var validation = channels.validateChannel(channelName, channelPassword);
 
 	console.log("Channel accessed! (%s) with password: %s", channelName, channelPassword);
 
 
-	if(channels.validateChannel(channelName, channelPassword)) {
+	if (validation.valid) {
 		console.log(`Rendering '${channelName}' (${channelPassword})...`);
 
 		res.render("channel", {
@@ -77,7 +80,7 @@ app.get('/channel/:channelName', (req, res) => {
 		res.render("index", {
 			alert: true,
 			alertMode: 'error',
-			alertText: 'Invalid channel!'
+			alertText: validation.message
 		});
 	}
 });

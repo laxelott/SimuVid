@@ -4,7 +4,7 @@
 	max-width: 100%;
 }
 
-/* For channel creation */
+/* Channel creation thing */
 #form-channel {
 	width: 100%;
     padding: 15px;
@@ -13,4 +13,9 @@
 
 .form-container {
 	max-width: 330px;
+}
+
+/* File Input */
+.custom-file-label::after {
+	display: none
 }

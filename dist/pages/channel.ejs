@@ -185,8 +185,9 @@
             });
             $('#btn-link').popover({
                     container: 'body',
-                    content: 'Link copied! Share it with your friends c:',
-                    placement: 'top',
+                    title: 'Link copied!',
+                    content: 'Share it with your friends c:',
+                    placement: 'right',
                     trigger: 'focus'
                 });
             /*
@@ -224,7 +225,7 @@
         <%- include('../partials/header'); %>
     </header>
 
-    <div class="container w-50 p-4">
+    <div class="container p-4">
         <div id="div-alert" class="alert alert-danger" role="alert">
             Not Connected
         </div>
@@ -245,7 +246,7 @@
                 </div>
                 <div class="custom-file">
                     <input id="file-video" type="file" class="custom-file-input" accept="video/*">
-                    <label id="lbl-video" class="custom-file-label" for="file-video">Choose file</label>
+                    <label id="lbl-video" class="custom-file-label" for="file-video">Choose file...</label>
                 </div>
             </div>
         </div>
