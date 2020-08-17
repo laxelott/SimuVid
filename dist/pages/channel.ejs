@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <%- include('../partials/head'); %>
+
+    <!-- Main Script -->
+    <script type="module" defer>
+        import { webSocket } from "/js/WebSocket.js";
+        const playerEvents = [ // Player events that get sent to the Web Socket
+            "play", "pause", "seeked"
+        ];
+        const keyboardShortcuts = [
+            {
+                name: "Pause/Play",
+                keyName: "Space",
+                keyCode: 32,
+                event: function () {
+                    if (player.paused()) {
+                        player.play();
+                    } else {
+                        player.pause();
+                    }
+                }
+            }, {
+                name: "Seek Backward",
+                keyName: "Left Arrow Key",
+                keyCode: 37,
+                event: function () {
+                    player.currentTime(player.currentTime() - 5);
+                }
+            }, {
+                name: "Seek Forward",
+                keyName: "Right Arrow Key",
+                keyCode: 39,
+                event: function () {
+                    player.currentTime(player.currentTime() + 5);
+                }
+            }, {
+                name: "Full Screen",
+                keyName: "F",
+                keyCode: 70,
+                event: function () {
+                    if (player.isFullscreen()) {
+                        player.exitFullscreen();
+                    } else {
+                        player.requestFullscreen();
+                    }
+                }
+            }
+        ];
+        const channelName = "<%= channelName %>";
+        const channelPassword = "<%= channelPassword %>";
+
+        var data = {};
+        var currentlyEventing;
+        var player;
+
+        // Set as wss if it is https
+        if (window.location.protocol == "https:") {
+            webSocket.webSocketProtocol = "wss";
+        }
+
+        webSocket.webSocketLocation = `${channelName}?pwd=${channelPassword}`;
+
+
+        // WEBSOCKET MANAGEMENT
+        // Events
+        webSocket.onOpen = function () {
+            updateAlert("ready");
+        };
+        webSocket.onClose = function () {
+            updateAlert("error");
+        }
+        webSocket.onMessage = function (message) {
+            updateAlert("loading");
+            message = JSON.parse(message.data);
+            message.timestamp -= new Date().getTime();
+
+            console.log("processing? %o, event: %s", currentlyEventing, message.event);
+
+
+            setTimeout(function () {
+                currentlyEventing = true;
+                player.currentTime(message.time);
+
+                switch (message.event) {
+                    case "play":
+                        currentlyEventing = true;
+                        player.play();
+                        break;
+                    case "pause":
+                        currentlyEventing = true;
+                        player.pause();
+                        break;
+                    default:
+                        console.log("Defaulted with '%s'", message.event);
+                }
+
+                setTimeout(function () {
+                    currentlyEventing = false;
+                    player.muted(false);
+                    updateAlert("ready");
+                }, 200);
+
+            }, message.timestamp);
+        };
+
+
+
+        // FUNCTIONS
+        // Video Function
+        function processEvent(event) {
+            if (!currentlyEventing) {
+                currentlyEventing = true;
+                player.muted(true);
+
+                data.event = event.type;
+                data.time = player.currentTime();
+                webSocket.send(JSON.stringify(data));
+            }
+        }
+
+        // Alert Function
+        function updateAlert(mode) {
+            $("#div-alert").removeClass("alert-warning");
+            $("#div-alert").removeClass("alert-success");
+            $("#div-alert").removeClass("alert-danger");
+            switch (mode) {
+                case "ready":
+                    $("#div-alert").addClass("alert-success");
+                    $("#div-alert").text("Ready");
+                    break;
+                case "loading":
+                    $("#div-alert").addClass("alert-warning");
+                    $("#div-alert").text("Loading...");
+                    break;
+                case "error":
+                    $("#div-alert").addClass("alert-danger");
+                    $("#div-alert").text("Not Connected");
+                    break;
+            }
+        }
+
+
+
+        // DOCUMENT
+        $(document).ready(function () {
+            console.log(webSocket);
+            console.log(webSocket.getFullPath());
+
+            // Connect to the Web Socket
+            webSocket.connect();
+
+            player = videojs('video-main');
+
+            // File Input
+            $("#file-video").change(function () {
+                // If user selected files
+                if ($(this).get()[0].files.length != 0) {
+
+                    // Get file
+                    var file = $(this).get()[0].files[0];
+
+                    // Create video url from file 
+                    var fileUrl = URL.createObjectURL(file);
+
+                    // Add the url as a video source and set MIME type
+                    player.src([
+                        { type: file.type, src: fileUrl }
+                    ]);
+
+                    // Set video to preload
+                    $("#video-main").prop("preload", "auto");
+
+                    // Set file input text
+                    $("#lbl-video").html("Current file: " + file.name);
+
+                    // Set file name 
+                    data.filename = file.name;
+                }
+            });
+            $("#btn-link").click(function () {
+                navigator.clipboard.writeText(window.location.href);
+            });
+            $('#btn-link').popover({
+                    container: 'body',
+                    content: 'Link copied! Share it with your friends c:',
+                    placement: 'top',
+                    trigger: 'focus'
+                });
+            /*
+            Shortcut structure:
+            {
+                name: string
+                key: string
+                keyCode: int
+                event: function
+            }
+            */
+            // Keyboard shortcuts
+            keyboardShortcuts.forEach(shortcut => {
+                $(document).keydown(function (event) {
+                    console.log(event.which);
+                    if (event.which == shortcut.keyCode) {
+                        console.log("Running '%s'...", shortcut.name);
+                        shortcut.event();
+                    }
+                });
+            });
+
+            // VIDEO EVENTS
+            // -> On every event, send relevant data through websocket
+            playerEvents.forEach(eventCode => {
+                player.on(eventCode, processEvent);
+            });
+        });
+    </script>
+</head>
+
+<body class="text-center">
+
+    <header>
+        <%- include('../partials/header'); %>
+    </header>
+
+    <div class="container w-50 p-4">
+        <div id="div-alert" class="alert alert-danger" role="alert">
+            Not Connected
+        </div>
+        <div class="row justify-content-center video-js-responsive-container vjs-hd">
+            <video id="video-main" class="video-js vjs-16-9" controls preload="none" poster="/img/no-video.png" data-setup="{}">
+                <p class="vjs-no-js">
+                    To view this video please enable JavaScript, and consider upgrading to a
+                    web browser that
+                    <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
+                </p>
+            </video>
+        </div>
+        <br>
+        <div class="row justify-content-center">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <button id="btn-link" type="submit" class="btn btn-primary" >Copy invitation link</button>
+                </div>
+                <div class="custom-file">
+                    <input id="file-video" type="file" class="custom-file-input" accept="video/*">
+                    <label id="lbl-video" class="custom-file-label" for="file-video">Choose file</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
