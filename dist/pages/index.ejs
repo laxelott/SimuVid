@@ -7,8 +7,8 @@
 	<!-- Main Script -->
 	<script defer>
 		// FUNCTIONS
-		function customAlert(text, mode) {
-			$("#div-alert").fadeOut(1000, function () {
+		function customAlert(text, mode, callback = () => { }) {
+			$("#div-alert").fadeOut('fast', function () {
 
 				$("#div-alert").removeClass("alert-warning");
 				$("#div-alert").removeClass("alert-success");
@@ -27,46 +27,46 @@
 				}
 
 				$("#div-alert").text(text);
-				$("#div-alert").fadeIn(1000);
+				$("#div-alert").fadeIn('slow', callback);
 			});
 		}
 		function connectToChannel(name, password) {
-			window.location.href = `${window.location.origin}/channel/${name}?pwd=${password}`;
+			window.location.replace(`${window.location.origin}/channel/${name}?pwd=${password}`);
 		}
 
 		$(document).ready(function () {
 			$("#form-channel").submit(function (ev) {
 				ev.preventDefault();
 
-				// Get the channel information
-				var data = {
+				$.post('/create/channel/', {
 					name: $("#txt-channel-name").val(),
 					password: $("#txt-channel-password").val()
-				};
-
-				$.post('/create/channel/', data, function (response) {
+				}, function (response) {
 					response = JSON.parse(response);
 					console.log(response);
 
-					// Give message
-					customAlert(response.message, response.error ? "error" : "success");
-
-					// Wait and redirect to newly created channel
-					if (!response.error) {
-						setTimeout(() => {
-							connectToChannel(
-								response.channel.name,
-								response.channel.password
-							);
-						}, 2000);
-					}
+					// Give message and redirect when complete
+					customAlert(response.message, response.error ? "error" : "success", () => {
+						if (!response.error) {
+							connectToChannel( response.channel.name, response.channel.password );
+						}
+					});
 				});
 			});
 			$("#btn-connect").click(function () {
-				connectToChannel(
-					$("#txt-channel-name").val(),
-					$("#txt-channel-password").val()
-				);
+				$.post("/get/channel/", {
+					name: $("#txt-channel-name").val(),
+					password: $("#txt-channel-password").val()
+				}, function (response) {
+					response = JSON.parse(response);
+					console.log(response);
+
+					if (response.valid) {
+						connectToChannel( response.name, response.password );
+					} else {
+						customAlert(response.message, "error");
+					}
+				});
 			});
 		});
 	</script>
@@ -99,7 +99,7 @@
 			</div>
 			<div class="btn-group">
 				<button type="submit" class="btn btn-primary">Create</button>
-				<button id="btn-connect" class="btn btn-secondary">Connect</button>
+				<button type="button" id="btn-connect" class="btn btn-secondary">Connect</button>
 			</div>
 		</form>
 
@@ -111,6 +111,7 @@
 	<% if (locals.alert) { %>
 	<script>
 		customAlert('<%= alertText %>', '<%= alertMode %>');
+		history.pushState({}, 'Error!', window.location.origin);
 	</script>
 	<% } %>
 </body>

@@ -4,6 +4,7 @@
 	max-width: 100%;
 }
 
+
 /* Channel creation thing */
 #form-channel {
 	width: 100%;
@@ -15,7 +16,23 @@
 	max-width: 330px;
 }
 
+
 /* File Input */
 .custom-file-label::after {
 	display: none
+}
+.custom-file-input {
+	cursor:pointer;
+}
+
+
+/* Video */
+.video-js .vjs-tech {
+	pointer-events: all;
+}
+.vjs-text-track-display {
+	pointer-events: all !important;
+}
+.vjs-play-control {
+	display: none !important; 
 }

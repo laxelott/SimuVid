@@ -1,14 +1,14 @@
-require("./modules/hashCode");
-
 const express = require('express');
-const http = require('http');
 const fs = require('fs');
 const parser = require('body-parser');
+const utilities = require("./modules/util");
 
 const app = express();
 const webPort = 8080;
 
-var channels = require('./modules/channels');
+const http = require('http').createServer(app);
+const channels = require('./modules/channels')(http);
+
 
 // Set the view engine to ejs
 app.set('view engine', 'ejs');
@@ -16,7 +16,6 @@ app.set('view engine', 'ejs');
 app.set("views", __dirname + "/../dist/pages");
 
 // Initialize channels module
-channels = channels(app);
 channels.logFunction = addToLogFile;
 
 
@@ -50,28 +49,15 @@ app.get('/what-to-do', (req, res) => {
 	res.render("instructions");
 });
 
-// Channel creation
-app.post('/create/channel/', parser.urlencoded({ extended: false }), (req, res) => {
-	var channelName = req.body.name;
-	var channelPassword = req.body.name;
 
-	res.end(JSON.stringify(channels.createChannel(channelName, channelPassword)));
 
-	channels.queueRemoveChannel(channelName, 5000);
-});
-
-// Channels
+// General channel page
 app.get('/channel/:channelName', (req, res) => {
 	var channelName = req.params.channelName;
 	var channelPassword = req.query.pwd;
 	var validation = channels.validateChannel(channelName, channelPassword);
 
-	console.log("Channel accessed! (%s) with password: %s", channelName, channelPassword);
-
-
 	if (validation.valid) {
-		console.log(`Rendering '${channelName}' (${channelPassword})...`);
-
 		res.render("channel", {
 			channelName: channelName,
 			channelPassword: channelPassword
@@ -84,8 +70,47 @@ app.get('/channel/:channelName', (req, res) => {
 		});
 	}
 });
+// Channel information
+app.post('/get/channel/', parser.urlencoded({ extended: false }), (req, res) => {
+	var channelName = req.body.name;
+	var channelPassword = req.body.password;
+	var validation;
+	var response = {
+		valid: false,
+		message: 'no-message'
+	};
 
-app.listen(webPort, () => {
+	channelPassword = utilities.processPassword(channelName + channelPassword);
+	validation = channels.validateChannel(channelName, channelPassword);
+
+	console.log(channelName);
+	console.log(channelPassword);
+
+	if (validation.valid) {
+		// Give out the channel's info
+		response.valid = true;
+		response.name = channelName;
+		response.password = channelPassword;
+	} else {
+		response.message = validation.message;
+	}
+
+	res.end(JSON.stringify(response));
+});
+// Channel creation
+app.post('/create/channel/', parser.urlencoded({ extended: false }), (req, res) => {
+	var channelName = req.body.name;
+	var channelPassword = req.body.password;
+	var response = channels.createChannel(channelName, channelPassword);
+
+	res.end(JSON.stringify(response));
+
+	if (!response.error) {
+		channels.queueRemoveChannel(channelName, 5000);
+	}
+});
+
+http.listen(webPort, () => {
 	console.log(`Server opened on port ${webPort}!`);
 })
 

@@ -8,7 +8,7 @@
     <script type="module" defer>
         import { webSocket } from "/js/WebSocket.js";
         const playerEvents = [ // Player events that get sent to the Web Socket
-            "play", "pause", "seeked"
+            "play-server", "pause-server"
         ];
         const keyboardShortcuts = [
             {
@@ -17,9 +17,9 @@
                 keyCode: 32,
                 event: function () {
                     if (player.paused()) {
-                        player.play();
+                        sendEventToServer("play");
                     } else {
-                        player.pause();
+                        sendEventToServer("pause");
                     }
                 }
             }, {
@@ -27,14 +27,14 @@
                 keyName: "Left Arrow Key",
                 keyCode: 37,
                 event: function () {
-                    player.currentTime(player.currentTime() - 5);
+                    sendEventToServer("seek", -5);
                 }
             }, {
                 name: "Seek Forward",
                 keyName: "Right Arrow Key",
                 keyCode: 39,
                 event: function () {
-                    player.currentTime(player.currentTime() + 5);
+                    sendEventToServer("seek", +5);
                 }
             }, {
                 name: "Full Screen",
@@ -47,13 +47,19 @@
                         player.requestFullscreen();
                     }
                 }
+            }, {
+                name: "Mute",
+                keyName: "M",
+                keyCode: 77,
+                event: function () {
+                    player.muted(!player.muted());
+                }
             }
         ];
         const channelName = "<%= channelName %>";
         const channelPassword = "<%= channelPassword %>";
 
         var data = {};
-        var currentlyEventing;
         var player;
 
         // Set as wss if it is https
@@ -61,97 +67,109 @@
             webSocket.webSocketProtocol = "wss";
         }
 
-        webSocket.webSocketLocation = `${channelName}?pwd=${channelPassword}`;
+
 
 
         // WEBSOCKET MANAGEMENT
         // Events
-        webSocket.onOpen = function () {
-            updateAlert("ready");
-        };
-        webSocket.onClose = function () {
-            updateAlert("error");
-        }
-        webSocket.onMessage = function (message) {
-            updateAlert("loading");
-            message = JSON.parse(message.data);
-            message.timestamp -= new Date().getTime();
-
-            console.log("processing? %o, event: %s", currentlyEventing, message.event);
-
-
-            setTimeout(function () {
-                currentlyEventing = true;
-                player.currentTime(message.time);
-
-                switch (message.event) {
-                    case "play":
-                        currentlyEventing = true;
-                        player.play();
-                        break;
-                    case "pause":
-                        currentlyEventing = true;
-                        player.pause();
-                        break;
-                    default:
-                        console.log("Defaulted with '%s'", message.event);
+        webSocket.events = [
+            {
+                name: 'connect',
+                handler: function () {
+                    updateAlert("Connected", 0);
                 }
+            }, {
+                name: 'disconnect',
+                handler: function (reason) {
+                    console.log("disconnect" + reason);
+                    if (!$("#div-alert").hasClass("alert-danger")) {
+                        updateAlert("Disconnected!", 2);
+                    }
+                }
+            }, {
+                name: 'player',
+                handler: function (data) {
+                    updateAlert("Loading", 1);
+                    data.timestamp -= new Date().getTime();
 
-                setTimeout(function () {
-                    currentlyEventing = false;
-                    player.muted(false);
-                    updateAlert("ready");
-                }, 200);
+                    setTimeout(() => {
+                        player.currentTime(data.time);
 
-            }, message.timestamp);
-        };
+                        switch (data.event) {
+                            case "play":
+                                player.play();
+                                break;
+                            case "pause":
+                                player.pause();
+                                break;
+                            default:
+                                console.log("Defaulted with '%s'", data.event);
+                        }
+
+                        updateAlert("Ready", 0);
+                    }, data.timestamp);
+                }
+            }, {
+                name: 'handshake',
+                handler: function (data) {
+                    data = JSON.parse(data);
+
+                    if (!data.valid) {
+                        updateAlert(data.message, 2);
+                    }
+                }
+            }
+        ];
 
 
 
         // FUNCTIONS
         // Video Function
-        function processEvent(event) {
-            if (!currentlyEventing) {
-                currentlyEventing = true;
-                player.muted(true);
+        function sendEventToServer(event, timeModifier = 0) {
+            player.pause();
 
-                data.event = event.type;
-                data.time = player.currentTime();
-                webSocket.send(JSON.stringify(data));
-            }
+            data.event = event;
+            data.time = player.currentTime() + timeModifier;
+            webSocket.send(JSON.stringify(data));
         }
 
         // Alert Function
-        function updateAlert(mode) {
+        // 0 is success, 1 is warning, 2 is danger
+        function updateAlert(update, mode = 0) {
             $("#div-alert").removeClass("alert-warning");
             $("#div-alert").removeClass("alert-success");
             $("#div-alert").removeClass("alert-danger");
+
+            var addedClass;
+            var text = $("#div-alert").text();
+            text = (update != "") ? update : text;
+
             switch (mode) {
-                case "ready":
-                    $("#div-alert").addClass("alert-success");
-                    $("#div-alert").text("Ready");
+                case 0:
+                    addedClass = "alert-success";
                     break;
-                case "loading":
-                    $("#div-alert").addClass("alert-warning");
-                    $("#div-alert").text("Loading...");
+                case 1:
+                    addedClass = "alert-warning";
                     break;
-                case "error":
-                    $("#div-alert").addClass("alert-danger");
-                    $("#div-alert").text("Not Connected");
+                case 2:
+                    addedClass = "alert-danger";
                     break;
             }
-        }
 
+            $("#div-alert").addClass(addedClass);
+            $("#div-alert").text(text);
+        }
 
 
         // DOCUMENT
         $(document).ready(function () {
-            console.log(webSocket);
-            console.log(webSocket.getFullPath());
-
             // Connect to the Web Socket
-            webSocket.connect();
+            webSocket.connect({
+                name: channelName,
+                pwd: channelPassword
+            });
 
+            // Get the video player
             player = videojs('video-main');
 
             // File Input
@@ -170,50 +188,49 @@
                         { type: file.type, src: fileUrl }
                     ]);
 
-                    // Set video to preload
-                    $("#video-main").prop("preload", "auto");
-
                     // Set file input text
                     $("#lbl-video").html("Current file: " + file.name);
 
                     // Set file name 
                     data.filename = file.name;
+
+                    // Focus video
+                    player.focus();
                 }
             });
+
+            // Link button
             $("#btn-link").click(function () {
                 navigator.clipboard.writeText(window.location.href);
             });
             $('#btn-link').popover({
-                    container: 'body',
-                    title: 'Link copied!',
-                    content: 'Share it with your friends c:',
-                    placement: 'right',
-                    trigger: 'focus'
-                });
-            /*
-            Shortcut structure:
-            {
-                name: string
-                key: string
-                keyCode: int
-                event: function
-            }
-            */
+                container: 'body',
+                title: 'Link copied!',
+                content: 'Share it with your friends c:',
+                placement: 'right',
+                trigger: 'focus'
+            });
+
+            // Video player
+            $(document).on("click", ".vjs-text-track-display", function () {
+                if (player.paused()) {
+                    sendEventToServer("play");
+                } else {
+                    sendEventToServer("pause");
+                }
+            });
+            $(document).on("mouseup", ".vjs-progress-control", function () {
+                sendEventToServer("seek");
+            });
+
+
             // Keyboard shortcuts
             keyboardShortcuts.forEach(shortcut => {
                 $(document).keydown(function (event) {
-                    console.log(event.which);
                     if (event.which == shortcut.keyCode) {
-                        console.log("Running '%s'...", shortcut.name);
                         shortcut.event();
                     }
                 });
-            });
-
-            // VIDEO EVENTS
-            // -> On every event, send relevant data through websocket
-            playerEvents.forEach(eventCode => {
-                player.on(eventCode, processEvent);
             });
         });
     </script>
@@ -242,7 +259,7 @@
         <div class="row justify-content-center">
             <div class="input-group">
                 <div class="input-group-prepend">
-                    <button id="btn-link" type="submit" class="btn btn-primary" >Copy invitation link</button>
+                    <button id="btn-link" type="submit" class="btn btn-primary">Copy invitation link</button>
                 </div>
                 <div class="custom-file">
                     <input id="file-video" type="file" class="custom-file-input" accept="video/*">

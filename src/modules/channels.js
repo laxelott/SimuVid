@@ -1,90 +1,97 @@
-module.exports = function (app) {
-	const expressWs = require('express-ws');
-	const ws = expressWs(app);
+module.exports = function (http) {
+	const io = require('socket.io')(http);
+	const utilities = require("./util");
 
-	this.app = undefined;
 	this.openChannels = [];
+
+
+
+	// Room and socket login
+	io.on('connection', (socket) => {
+		var name = socket.handshake.query.name;
+		var password = socket.handshake.query.pwd;
+		var data = {
+			event: "handshake",
+			data: "Hello! C:"
+		};
+		var validation = validateChannel(name, password);
+
+		logFunction(`${socket.handshake.address} connecting -> ${name} (pw: ${password})`);
+
+		// Check if channel is valid
+		if (validation.valid) {
+			// Join socket to relevant room
+			socket.join(name);
+
+			socket.on('message', (data) => {
+				try {
+					data = JSON.parse(data.data);
+					
+					// Log message
+					logFunction(`Recieved: ${JSON.stringify(data)}`);
+
+					// Add timestamp
+					data.timestamp = new Date().getTime() + 500;
+
+					// Broadcast player event to everyone in room
+					io.in(name).emit('player', data);
+				} catch (event) {
+					logFunction(`Channel '${name}' tried to die! (${event})`);
+				}
+			});
+
+			socket.on('disconnect', () => {
+				logFunction(`${socket.handshake.address} disconnected from '${name}'`);
+
+				// Try to close the channel in case this was the last socket there
+				queueRemoveChannel(name, 5000);
+			});
+		} else {
+			logFunction(validation.message);
+		}
+		// Send Handshake
+		socket.emit('handshake', JSON.stringify(validation));
+
+		if (!validation.valid) {
+			socket.disconnect('true')	;
+		}
+	});
+
+
 
 	this.logFunction = function (data) {
 		console.log(data);
 	};
 
+
+
+	// CHANNEL MANAGEMENT
 	this.createChannel = function (name, password) {
 		var result = {
 			error: 0,
 			message: "No message"
 		};
 
-		// If channel is not registered
+		// Only if channel is not registered
 		if (openChannels.filter((channel) => { return channel.name == name }).length == 0) {
-			var channel = {
-				name: name,
-				password: (name + password).hashCode().toString(16),
-				wss: ws.getWss("/" + name)
-			};
-
-			openChannels.push(channel);
-
-			logFunction(`Creating channel '${channel.name}' (pw: ${channel.password})...`);
-
-			// WebSocket Listener
-			app.ws("/" + channel.name, (ws, req) => {
-				var password = req.query.pwd;
-				var data = {
-					event: "handshake",
-					data: "Hello! C:"
+			if (validateChannelName(name)) {
+				var channel = {
+					name: name,
+					password: utilities.processPassword(name + password)
 				};
-				var validation = validateChannel(channel.name, password);
 
-				console.log(ws.handshake);
+				openChannels.push(channel);
 
-				logFunction(`${req.connection.remoteAddress} connecting -> ${channel.name} (pw: ${password})`);
+				logFunction(`Created channel! '${channel.name}' (pw: ${channel.password})...`);
 
-				// Check if channel is valid
-				if (validation.valid) {
-					logFunction("Valid credentials");
-
-					// Broadcast message event
-					ws.onmessage = (event) => {
-						try {
-							data = JSON.parse(event.data);
-
-							// Log message
-							logFunction(`Recieved: ${data}`);
-
-							// Add timestamp
-							data.timestamp = new Date().getTime() + 500;
-
-							// Broadcast message to everyone 
-							channel.wss.clients.forEach(client => {
-								client.send(JSON.stringify(data));
-							});
-						} catch (e) {
-							addToLogFile(`Channel '${channel.name}' tried to die! (${event.data})`);
-						}
-					};
-
-					ws.onclose = (event) => {
-						logFunction(`${ws._socket.remoteAddress}:${ws._socket.remotePort} disconnected from '${channel.name}'`);
-
-						// If all clients left, close the channel
-						queueRemoveChannel(channel.name);
-
-					};
-				} else {
-					data.data = validation.message;
-				}
-				// Send Handshake
-				ws.send(JSON.stringify(data));
-
-				if (!validation.valid) {
-					ws.close();
-				}
-			})
-
-			result.error = 0;
-			result.message = "Channel created!";
-			result.channel = channel;
+				result.error = 0;
+				result.message = "Created channel!";
+				result.channel = channel;
+			} else {
+				logFunction(`Channel naming error! '${name}' (pw: ${password})...`);
+				result.error = 1;
+				result.message = "Channel name must only contain letters or numbers!";
+			}
 		} else {
 			logFunction(`Channel duplication! '${name}' (pw: ${password})...`);
 			result.error = 1;
@@ -93,55 +100,62 @@ module.exports = function (app) {
 
 		return result;
 	};
-	this.queueRemoveChannel = function (name, waitTime = 2000) {
+	this.queueRemoveChannel = function (name, waitTime = 1000) {
 		try {
-			var channel = openChannels.filter((channel) => {
-				return channel.name = name;
-			})[0];
-
 			setTimeout(() => {
-				if (channel.wss.clients.size == 0) {
+				var room = io.sockets.adapter.rooms[name];
+
+				// If room is empty it doesn't exist
+				if (typeof room == 'undefined') {
 					logFunction(`Removing empty channel '${name}'...`);
 
-					var index = openChannels.findIndex((item) => {
-						return item.name == name;
+					var index = openChannels.findIndex((channel) => {
+						return channel.name == name;
 					});
 
 					if (index >= 0) {
-						openChannels[index].wss.close();
 						openChannels.splice(index, 1);
-						logFunction(`Channel closed`)
 					} else {
-						logFunction(`Channel does not exist!`)
+						logFunction('Channel already deleted!');
 					}
 				}
 			}, waitTime);
-		} catch (e) { }
+		} catch (e) {
+			console.log("Delete exception!");
+			console.log(e);
+		}
 	};
+
+
+
+	// VALIDATIONS
 	this.validateChannel = function (name, password) {
 		var num;
-		var res = {
+		var validation = {
 			valid: true,
 			message: "none"
 		};
-		
+
 		num = openChannels.findIndex((item) => {
 			return (item.name == name) && (item.password == password);
 		});
 		if (num < 0) {
-			res.valid = false;
+			validation.valid = false;
 			num = openChannels.findIndex((item) => {
 				return item.name == name;
 			});
 
 			if (num < 0) {
-				res.message = "Channel does not exist!";
+				validation.message = "Channel does not exist!";
 			} else {
-				res.message = "Wrong password";
+				validation.message = "Wrong password";
 			}
-		} 
+		}
 
-		return res;
+		return validation;
+	}
+	this.validateChannelName = function (channelName) {
+		return !/[^a-z0-9]+/gi.test(channelName);
 	}
 
 	return this;
