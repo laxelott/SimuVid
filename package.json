@@ -4,8 +4,7 @@
   "description": "SimuVid",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
-    "tsc": "tsc"
+    "start": "node src/app.js"
   },
   "author": "Laxelott",
   "license": "ISC",
